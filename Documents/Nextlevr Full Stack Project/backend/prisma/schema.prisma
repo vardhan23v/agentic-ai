@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  TEAM_MEMBER
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PROSPECT
+}
+
+enum CampaignType {
+  SOCIAL_MEDIA
+  SEO
+  EMAIL_MARKETING
+  PAID_ADVERTISING
+  CONTENT_MARKETING
+}
+
+enum CampaignStatus {
+  DRAFT
+  PLANNED
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  CONVERTED
+  LOST
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(TEAM_MEMBER)
+  disabled     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedLeads   Lead[]
+  assignedTasks   Task[]
+  activities      Activity[]
+  notifications   Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@index([disabled])
+}
+
+model Client {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String
+  company   String
+  email     String
+  phone     String?
+  industry  String?
+  website   String?
+  status    ClientStatus @default(ACTIVE)
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  campaigns Campaign[]
+  tasks     Task[]
+
+  @@index([status])
+  @@index([name])
+  @@index([company])
+  @@index([email])
+}
+
+model Campaign {
+  id             String         @id @default(uuid()) @db.Uuid
+  name           String
+  clientId       String         @db.Uuid
+  description    String?
+  type           CampaignType
+  startDate      DateTime
+  endDate        DateTime
+  budget         Decimal        @db.Decimal(12, 2)
+  status         CampaignStatus @default(DRAFT)
+  targetAudience String?
+  goals          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  leads  Lead[]
+  tasks  Task[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([type])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model Lead {
+  id             String     @id @default(uuid()) @db.Uuid
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  source         String
+  campaignId     String?    @db.Uuid
+  status         LeadStatus @default(NEW)
+  value          Decimal    @default(0) @db.Decimal(12, 2)
+  assignedUserId String?    @db.Uuid
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  assignedUser User?     @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([assignedUserId])
+  @@index([status])
+  @@index([email])
+  @@index([source])
+  @@index([createdAt])
+}
+
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  title          String
+  description    String?
+  assignedUserId String       @db.Uuid
+  clientId       String?      @db.Uuid
+  campaignId     String?      @db.Uuid
+  priority       TaskPriority @default(MEDIUM)
+  dueDate        DateTime
+  status         TaskStatus   @default(TODO)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  assignedUser User      @relation(fields: [assignedUserId], references: [id], onDelete: Cascade)
+  client       Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([assignedUserId])
+  @@index([clientId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+}
+
+model Activity {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String?  @db.Uuid
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  type      String
+  relatedId String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([type])
+  @@index([createdAt])
+}

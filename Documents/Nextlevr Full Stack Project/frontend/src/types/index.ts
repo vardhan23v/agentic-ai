@@ -54,6 +54,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  disabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -136,9 +137,6 @@ export interface Task {
   status: TaskStatus;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface TaskWithRelations extends Task {
   assignedUser: {
     id: string;
     name: string;
@@ -156,6 +154,9 @@ export interface TaskWithRelations extends Task {
     type: CampaignType;
   } | null;
 }
+
+/** @deprecated Use `Task` directly; the backend always returns tasks with relations. */
+export type TaskWithRelations = Task;
 
 export interface Activity {
   id: string;

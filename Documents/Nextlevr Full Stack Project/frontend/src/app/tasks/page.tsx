@@ -3,17 +3,23 @@
 import { useState, useCallback } from "react";
 import {
   useTasks,
+  useCreateTask,
+  useUpdateTask,
+  useUpdateTaskStatus,
+  useDeleteTask,
   CreateTaskInput,
   UpdateTaskInput,
 } from "@/hooks/useTasks";
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TaskKanban } from "@/components/tasks/TaskKanban";
 import { TaskList } from "@/components/tasks/TaskList";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TaskWithRelations, TaskStatus, UserRole } from "@/types";
-import { Plus } from "lucide-react";
+import { Plus, LayoutList, Kanban } from "lucide-react";
 
 type ViewMode = "kanban" | "list";
 
@@ -22,23 +28,20 @@ export default function TasksPage() {
     <ProtectedRoute
       allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.TEAM_MEMBER]}
     >
-      <TasksContent />
+      <DashboardLayout>
+        <TasksContent />
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }
 
 function TasksContent() {
   const { user } = useAuth();
-  const {
-    tasks,
-    loading,
-    error,
-    fetchTasks,
-    createTask,
-    updateTask,
-    updateTaskStatus,
-    deleteTask,
-  } = useTasks();
+  const { data: tasks = [], isLoading, isError, error, refetch } = useTasks();
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const updateTaskStatus = useUpdateTaskStatus();
+  const deleteTask = useDeleteTask();
 
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [showForm, setShowForm] = useState(false);
@@ -66,7 +69,7 @@ function TasksContent() {
 
   const handleMove = useCallback(
     async (taskId: string, newStatus: TaskStatus) => {
-      await updateTaskStatus(taskId, { status: newStatus });
+      await updateTaskStatus.mutateAsync({ id: taskId, data: { status: newStatus } });
     },
     [updateTaskStatus]
   );
@@ -74,9 +77,9 @@ function TasksContent() {
   const handleFormSubmit = useCallback(
     async (data: CreateTaskInput | UpdateTaskInput) => {
       if (editingTask) {
-        await updateTask(editingTask.id, data as UpdateTaskInput);
+        await updateTask.mutateAsync({ id: editingTask.id, data: data as UpdateTaskInput });
       } else {
-        await createTask(data as CreateTaskInput);
+        await createTask.mutateAsync(data as CreateTaskInput);
       }
       setShowForm(false);
       setEditingTask(null);
@@ -86,9 +89,15 @@ function TasksContent() {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
-    await deleteTask(deleteConfirm.id);
+    await deleteTask.mutateAsync(deleteConfirm.id);
     setDeleteConfirm(null);
   }, [deleteConfirm, deleteTask]);
+
+  const isPending =
+    createTask.isPending ||
+    updateTask.isPending ||
+    updateTaskStatus.isPending ||
+    deleteTask.isPending;
 
   return (
     <div className="space-y-6">
@@ -108,28 +117,30 @@ function TasksContent() {
           <div className="inline-flex rounded-lg border border-border bg-card p-1">
             <button
               onClick={() => setViewMode("kanban")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === "kanban"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
+              <Kanban className="mr-1.5 h-4 w-4" />
               Kanban
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === "list"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
+              <LayoutList className="mr-1.5 h-4 w-4" />
               List
             </button>
           </div>
 
           {canModify && (
-            <Button onClick={handleCreate} className="shrink-0">
+            <Button onClick={handleCreate} className="shrink-0" disabled={isPending}>
               <Plus className="mr-2 h-4 w-4" />
               Add Task
             </Button>
@@ -138,11 +149,11 @@ function TasksContent() {
       </div>
 
       {/* Error state */}
-      {error && (
+      {isError && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
+          {error?.message || "Failed to fetch tasks"}
           <button
-            onClick={() => fetchTasks()}
+            onClick={() => refetch()}
             className="ml-2 underline underline-offset-2 hover:no-underline"
           >
             Retry
@@ -151,7 +162,7 @@ function TasksContent() {
       )}
 
       {/* Loading skeleton */}
-      {loading && (
+      {isLoading && (
         <div className="space-y-4">
           <div className="flex gap-4 overflow-x-auto pb-2">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -160,8 +171,8 @@ function TasksContent() {
                 className="w-80 min-w-[20rem] shrink-0 rounded-xl border border-border bg-card"
               >
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                  <div className="h-5 w-20 animate-pulse rounded bg-muted" />
-                  <div className="h-4 w-8 animate-pulse rounded bg-muted" />
+                  <Skeleton className="h-5 w-20" />
+                  <Skeleton className="h-4 w-8" />
                 </div>
                 <div className="space-y-3 p-3">
                   {Array.from({ length: 2 }).map((_, j) => (
@@ -169,9 +180,9 @@ function TasksContent() {
                       key={j}
                       className="rounded-lg border border-border bg-card p-3"
                     >
-                      <div className="h-4 w-28 animate-pulse rounded bg-muted" />
-                      <div className="mt-2 h-3 w-20 animate-pulse rounded bg-muted" />
-                      <div className="mt-2 h-3 w-16 animate-pulse rounded bg-muted" />
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="mt-2 h-3 w-20" />
+                      <Skeleton className="mt-2 h-3 w-16" />
                     </div>
                   ))}
                 </div>
@@ -181,8 +192,29 @@ function TasksContent() {
         </div>
       )}
 
+      {/* Empty state */}
+      {!isLoading && !isError && tasks.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-16">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <LayoutList className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-card-foreground">
+            No tasks yet
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create your first task to start tracking work.
+          </p>
+          {canModify && (
+            <Button onClick={handleCreate} className="mt-4" disabled={isPending}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Task
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Views */}
-      {!loading && viewMode === "kanban" && (
+      {!isLoading && !isError && tasks.length > 0 && viewMode === "kanban" && (
         <TaskKanban
           tasks={tasks}
           currentUserRole={user?.role}
@@ -193,7 +225,7 @@ function TasksContent() {
         />
       )}
 
-      {!loading && viewMode === "list" && (
+      {!isLoading && !isError && tasks.length > 0 && viewMode === "list" && (
         <TaskList
           tasks={tasks}
           currentUserRole={user?.role}
@@ -237,12 +269,14 @@ function TasksContent() {
               <Button
                 variant="outline"
                 onClick={() => setDeleteConfirm(null)}
+                disabled={deleteTask.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleDeleteConfirm}
+                disabled={deleteTask.isPending}
               >
                 Delete
               </Button>

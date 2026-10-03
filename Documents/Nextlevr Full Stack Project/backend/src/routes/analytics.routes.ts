@@ -1,0 +1,18 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
+import * as analyticsController from '../controllers/analytics.controller';
+
+const router = Router();
+
+// Analytics routes are restricted to Admin and Manager roles
+router.use(requireAuth, requireRole('ADMIN', 'MANAGER', 'TEAM_MEMBER'));
+
+router.get('/dashboard', analyticsController.getDashboardStats);
+router.get('/campaigns', analyticsController.getCampaignPerformance);
+router.get('/leads', analyticsController.getLeadTrends);
+router.get('/revenue', analyticsController.getRevenueStats);
+router.get('/clients/growth', analyticsController.getClientGrowth);
+router.get('/leads/status', analyticsController.getLeadStatusDistribution);
+
+export default router;
